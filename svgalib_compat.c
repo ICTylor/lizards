@@ -201,7 +201,7 @@ void vga_setpalette(unsigned char index, int r, int g, int b) {
     r = (r * 255) / 63;
     g = (g * 255) / 63;
     b = (b * 255) / 63;
-    color_palette[index] = (r << 16) | (g << 8) | b;
+    color_palette[index] = (b << 16) | (g << 8) | r;
 }
 
 void init_default_palette() {
