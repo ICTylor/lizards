@@ -156,8 +156,12 @@ int FALLING_DIAMONDS = ON;
 
 Sample samps[20];
 
-const int FPS = 60;
-const int frameDelay = 1000 / FPS;
+const int GAME_FPS = 8;
+const int TITLE_FPS = 20;
+const int EDITOR_FPS = 8;
+const int frameDelayGame = 1000 / GAME_FPS;
+const int frameDelayTitle = 1000 / TITLE_FPS;
+const int frameDelayEditor = 1000 / EDITOR_FPS;
 
 void sound(int snd_no) {
 
@@ -846,6 +850,7 @@ int main_edit_loop(void) {
     xp = yp = 0;
     xpos = ypos = 0;
     keyboard_init();
+    mouse_reset();
     gl_setcontextvga(10);
     gl_getcontext(&realscreen);
     gl_setcontextvgavirtual(10);
@@ -853,6 +858,7 @@ int main_edit_loop(void) {
     current_block = 0;
 
     while (1) {
+        uint32_t frameStart = SDL_GetTicks();
         keyboard_update();
 
         if (keyboard_keypressed(SCANCODE_Q)) {
@@ -941,6 +947,13 @@ int main_edit_loop(void) {
         }
         gl_putboxmask(xp * 10, yp * 10, 10, 10, map_graphics[current_block]);
         gl_copyscreen();
+
+        uint32_t frameTime = SDL_GetTicks() - frameStart;
+
+        // This keeps us from displaying more frames than intended FPS
+        if (frameDelayEditor > frameTime) {
+            SDL_Delay(frameDelayEditor - frameTime);
+        }
     }
     keyboard_close();
     return EXIT_SUCCESS;
@@ -1513,10 +1526,9 @@ int main_loop(void) {
         Virusmoved = NO;
         uint32_t frameTime = SDL_GetTicks() - frameStart;
 
-        // This keeps us from displaying more frames than 60/Second
-        if(frameDelay > frameTime)
-        {
-            SDL_Delay(frameDelay - frameTime);
+        // This keeps us from displaying more frames than intended FPS
+        if (frameDelayGame > frameTime) {
+            SDL_Delay(frameDelayGame - frameTime);
         }
     }
     gl_freecontext(&realscreen);
@@ -1756,9 +1768,8 @@ int title_page(void) {
         uint32_t frameTime = SDL_GetTicks() - frameStart;
 
         // This keeps us from displaying more frames than 60/Second
-        if(frameDelay > frameTime)
-        {
-            SDL_Delay(frameDelay - frameTime);
+        if (frameDelayTitle > frameTime) {
+            SDL_Delay(frameDelayTitle - frameTime);
         }
     }
     mouse_close();
