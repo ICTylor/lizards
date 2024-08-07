@@ -319,6 +319,7 @@ int keyboard_init(void) {
 // Close keyboard
 void keyboard_close(void) {
     // SDL handles keyboard cleanup, so we don't need to do anything here
+    memset(keyboard_state, 0, sizeof(uint8_t) * 512);
 }
 
 // Update keyboard state

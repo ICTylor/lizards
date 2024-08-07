@@ -150,7 +150,7 @@ int Cubemoved = NO;
 int current_channel = 1;
 int HASMAP = NO;
 int PRONGS = 20;
-int SOUND = OFF;
+int SOUND = ON;
 int upto500 = 0;
 int FALLING_DIAMONDS = ON;
 
@@ -324,6 +324,7 @@ void initialise(void) {
     vga_init();
 //    vga_screenoff();
     vga_setmode(10);
+    Snd_init(MAXSAMP, samps, SAMPRATE, NO_OF_CHANNELS, "/dev/dsp");
     load_samples();
 }
 
