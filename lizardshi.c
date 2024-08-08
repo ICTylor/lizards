@@ -1688,7 +1688,7 @@ int main_loop_iteration(void) {
         if (LIVES == 0) {
             if (SOUND == ON) {
                 sound(TOC);
-                sleep(5);
+                emscripten_sleep(5000);
             }
             keyboard_close();
             return GAME_OVER;
@@ -1707,7 +1707,7 @@ int main_loop_iteration(void) {
         for (i = 0; i < 17; i++) {
             sound(i);
         }
-        sleep(3);
+        emscripten_sleep(3000);
         keyboard_close();
         return GAME_NEXT_LEVEL;
     }
