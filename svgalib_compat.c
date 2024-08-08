@@ -39,7 +39,8 @@ void gl_fillbox(int x, int y, int width, int height, int color);
 void gl_putbox(int x, int y, int width, int height, void* buffer);
 void gl_getbox(int x, int y, int width, int height, void* buffer);
 void gl_putboxmask(int x, int y, int width, int height, void* buffer);
-void gl_copyscreen(GraphicsContext* context);
+void gl_copyscreen();
+//void gl_copyscreen(GraphicsContext* context);
 void gl_copyboxfromcontext(GraphicsContext* source, int sx, int sy, int width, int height, int dx, int dy);
 void gl_freecontext(GraphicsContext* context);
 int vga_getmousetype(void);
@@ -433,7 +434,22 @@ void gl_getcontext(GraphicsContext* context) {
     }
 }
 
-void gl_copyscreen(GraphicsContext* context) {
+//void gl_copyscreen(GraphicsContext* context) {
+//    // Update the SDL texture with our pixel buffer
+//    SDL_UpdateTexture(screen_texture, NULL, pixel_buffer, screen_width * sizeof(uint32_t));
+//
+//    // Clear the renderer
+//    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+//    SDL_RenderClear(renderer);
+//
+//    // Copy the texture to the renderer
+//    SDL_RenderCopy(renderer, screen_texture, NULL, NULL);
+//
+//    // Present the renderer
+//    SDL_RenderPresent(renderer);
+//}
+
+void gl_copyscreen() {
     // Update the SDL texture with our pixel buffer
     SDL_UpdateTexture(screen_texture, NULL, pixel_buffer, screen_width * sizeof(uint32_t));
 

@@ -12,6 +12,7 @@
  *****************************************************************************
  */
 
+#include<emscripten.h>
 #include<stdlib.h>
 #include<stdio.h>
 #include"svgalib_compat.h"
@@ -123,6 +124,13 @@
 #define SAMPRATE            8000         /* kHz */
 #define NO_OF_CHANNELS      8
 
+
+// Define custom return values for our game loops
+#define GAME_CONTINUE 0
+#define GAME_NEXT_LEVEL 1
+#define GAME_OVER -1
+#define GAME_QUIT -2
+
 typedef struct {
     int x, y, no_of_diamonds, no_of_morphers;
 } start_t;
@@ -162,6 +170,22 @@ const int EDITOR_FPS = 8;
 const int frameDelayGame = 1000 / GAME_FPS;
 const int frameDelayTitle = 1000 / TITLE_FPS;
 const int frameDelayEditor = 1000 / EDITOR_FPS;
+
+// Global variables (add these at the top of your file)
+GraphicsContext realscreen, static_picture;
+int mt, mX, mY, PLAY, beastx, beasty, animframe, row, col;
+
+FILE *infile;
+int i, j, xp, yp, row, col, xpos, ypos, lev, im, cur_level;
+GraphicsContext realscreen;
+GraphicsContext virtualscreen;
+int current_block;
+
+// Global variables for game state
+int current_game_state = 0; // 0: Title, 1: Main Game, 2: Editor
+int previous_game_state = -1; // To track state changes
+int ALIVE = YES;
+int main_loop_result = GAME_CONTINUE;
 
 void sound(int snd_no) {
 
@@ -842,120 +866,7 @@ void draw_status(void) {
 
 
 int main_edit_loop(void) {
-    FILE *infile;
-    int i, j, xp, yp, row, col, xpos, ypos, lev, im, cur_level;
-    GraphicsContext realscreen;
-    GraphicsContext virtualscreen;
-    int current_block;
-    cur_level = 0;
-    xp = yp = 0;
-    xpos = ypos = 0;
-    keyboard_init();
-    mouse_reset();
-    gl_setcontextvga(10);
-    gl_getcontext(&realscreen);
-    gl_setcontextvgavirtual(10);
-    gl_getcontext(&virtualscreen);
-    current_block = 0;
 
-    while (1) {
-        uint32_t frameStart = SDL_GetTicks();
-        keyboard_update();
-
-        if (keyboard_keypressed(SCANCODE_Q)) {
-            yp--;
-            if (yp < 0) {
-                yp = 0;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_A)) {
-            yp++;
-            if (yp > 47) {
-                yp = 47;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_O)) {
-            xp--;
-            if (xp < 0) {
-                xp = 0;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_P)) {
-            xp++;
-            if (xp > 63) {
-                xp = 63;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_CURSORBLOCKUP)) {
-            current_block += 4;
-            if (current_block > 255) {
-                current_block = 0;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_CURSORBLOCKDOWN)) {
-            current_block -= 4;
-            if (current_block < 0) {
-                current_block = 0;
-            }
-        }
-
-        if (keyboard_keypressed(SCANCODE_CURSORUP)) {
-            cur_level++;
-            if (cur_level > 19) {
-                cur_level = 19;
-            }
-        }
-        if (keyboard_keypressed(SCANCODE_CURSORDOWN)) {
-            cur_level--;
-            if (cur_level < 0) {
-                cur_level = 0;
-            }
-        }
-
-        if (keyboard_keypressed(SCANCODE_SPACE)) {
-            levels[cur_level][xp][yp] = current_block;
-        }
-        if (keyboard_keypressed(SCANCODE_F1)) {
-            for (i = 0; i < 64; i++) {
-                for (j = 0; j < 48; j++) {
-                    levels[cur_level][i][j] = SPACE;
-                }
-            }
-        }
-
-
-        if (keyboard_keypressed(SCANCODE_ESCAPE)) {
-            infile = fopen("levelshi", "wb");
-            for (lev = 0; lev < 20; lev++) {
-                for (xp = 0; xp < 64; xp++) {
-                    for (yp = 0; yp < 48; yp++) {
-                        if (levels[lev][xp][yp] == 64) {
-                            levels[lev][xp][yp] = 4;
-                        }
-                        fwrite(&(levels[lev][xp][yp]), 1, 1, infile);
-                    }
-                }
-            }
-            fclose(infile);
-            keyboard_close();
-            return EXIT_SUCCESS;
-        }
-
-        for (col = 0; col < 64; col++) {
-            for (row = 0; row < 48; row++) {
-                gl_putbox(col * 10, row * 10, 10, 10, map_graphics[levels[cur_level][col][row]]);
-            }
-        }
-        gl_putboxmask(xp * 10, yp * 10, 10, 10, map_graphics[current_block]);
-        gl_copyscreen();
-
-        uint32_t frameTime = SDL_GetTicks() - frameStart;
-
-        // This keeps us from displaying more frames than intended FPS
-        if (frameDelayEditor > frameTime) {
-            SDL_Delay(frameDelayEditor - frameTime);
-        }
-    }
     keyboard_close();
     return EXIT_SUCCESS;
 }
@@ -971,570 +882,6 @@ int main_edit_loop(void) {
  *
  *
  */
-int main_loop(void) {
-
-    /*
-    *
-    *   ******************************************
-    *    PRE LOOP STUFF
-    *   ******************************************
-    *
-    *
-    */
-
-    int i, smiley_posn;
-    start_t coords;
-    GraphicsContext realscreen, virtualscreen;
-    PRONGS = PRONGSDOWN;
-    copy_level(current);
-    reset_gravity();
-    coords = find_start(current);
-    diamondcount = coords.no_of_diamonds + coords.no_of_morphers;
-    prongsx = coords.x;
-    prongsy = coords.y;
-    LIVES = 3;
-    keyboard_init();
-    for (i = 0; i < 4; i++) {
-        score_block[i] = 0;
-    }
-    upto500 = 0;
-    smiley_posn = 0;
-    CHANGE = OFF;
-    HASMAP = NO;
-    gl_setcontextvga(10);
-    gl_getcontext(&realscreen);
-    gl_setcontextvgavirtual(10);
-    gl_getcontext(&virtualscreen);
-
-    gl_clearscreen(4);
-    draw_status();
-    draw_screen(prongsx, prongsy);
-    gl_copyscreen();
-    sound(END);
-
-    /*
-    *
-    *     ******************************************
-    *            LOOP
-    *     ******************************************
-    *
-    *
-    */
-
-    while (1) {
-        uint32_t frameStart = SDL_GetTicks();
-        keyboard_update();
-        update_level();
-        /*
-       *
-       *        *************************************
-       *           LEFT KEY PRESSED
-       *        *************************************
-       *
-       */
-
-        if (keyboard_keypressed(SCANCODE_O) ||
-            keyboard_keypressed(SCANCODE_CURSORBLOCKLEFT)) {
-            PRONGS = PRONGSLEFT;
-            manimframe++;
-            if (manimframe > 3) {
-                manimframe = 0;
-            }
-            if (*((*(current_level + (prongsx - 1))) + prongsy) == BRICK) {
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == VIRUS) {
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == CUBE) {
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == MORPHBLOCK) {
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == MAP) {
-                sound(MAPSOUND);
-                HASMAP = YES;
-                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == ROCK) {
-                if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
-                    *((*(current_level + (prongsx - 2))) + prongsy) = ROCK;
-                    *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx--;
-                    sound(GRIND);
-                    if (prongsx < 0) {
-                        prongsx = 0;
-                    }
-                }
-                if (*((*(current_level + (prongsx - 2))) + prongsy) == BEAST) {
-                    *((*(current_level + (prongsx - 2))) + prongsy) = ROCK;
-                    *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx--;
-                    if (prongsx < 0) {
-                        prongsx = 0;
-                    }
-                    sound(SPLAT);
-                    score += 50;
-                    upto500 += 50;
-                }
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == EGG) {
-                if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
-                    *((*(current_level + (prongsx - 2))) + prongsy) = EGG;
-                    *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx--;
-                    sound(GRIND);
-                    if (prongsx < 0) {
-                        prongsx = 0;
-                    }
-                }
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == BOMB) {
-                if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
-                    *((*(current_level + (prongsx - 2))) + prongsy) = BOMB;
-                    *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx--;
-                    sound(GRIND);
-                    if (prongsx < 0) {
-                        prongsx = 0;
-                    }
-                }
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == CHANGER) {
-                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
-                sound(CLICK);
-                CHANGE = ON;
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == SAND) {
-                score++;
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                sound(SLURP);
-                prongsx--;
-                if (prongsx < 0) {
-                    prongsx = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == SNAKE) {
-                score += 50;
-                upto500 += 50;
-                sound(WHINE);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx--;
-                if (prongsx < 0) {
-                    prongsx = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (*((*(current_level + (prongsx - 1))) + prongsy) == DIAMOND) {
-                score += 10;
-                upto500 += 10;
-                diamondcount--;
-                sound(WHEEP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx--;
-                if (prongsx < 0) {
-                    prongsx = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else {
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx--;
-                if (prongsx < 0) {
-                    prongsx = 0;
-                }
-            }
-            *((*(current_level + prongsx)) + prongsy) = PRONGS;
-        }
-
-        /*
-       *
-       *
-       *
-       *              ********************************
-       *                RIGHT KEY PRESSED
-       *              ********************************
-       *
-       *
-       *
-       */
-        if (keyboard_keypressed(SCANCODE_P) ||
-            keyboard_keypressed(SCANCODE_CURSORBLOCKRIGHT)) {
-            PRONGS = PRONGSRIGHT;
-            manimframe++;
-            if (manimframe > 3) {
-                manimframe = 0;
-            }
-            if (current_level[prongsx + 1][prongsy] == BRICK) {
-            } else if (current_level[prongsx + 1][prongsy] == VIRUS) {
-            } else if (current_level[prongsx + 1][prongsy] == MORPHBLOCK) {
-            } else if (current_level[prongsx + 1][prongsy] == CUBE) {
-            } else if (current_level[prongsx + 1][prongsy] == BEAST) {
-                sound(ROAR);
-                DIE = 1;
-            } else if (current_level[prongsx + 1][prongsy] == MAP) {
-                sound(MAPSOUND);
-                HASMAP = YES;
-                current_level[prongsx + 1][prongsy] = SPACE;
-            } else if (current_level[prongsx + 1][prongsy] == ROCK) {
-                if (current_level[prongsx + 2][prongsy] == SPACE) {
-                    current_level[prongsx + 2][prongsy] = ROCK;
-                    current_level[prongsx + 1][prongsy] = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    sound(GRIND);
-                    prongsx++;
-                    if (prongsx > 64) {
-                        prongsx = 64;
-                    }
-                }
-                if (current_level[prongsx + 2][prongsy] == BEAST) {
-                    current_level[prongsx + 2][prongsy] = ROCK;
-                    current_level[prongsx + 1][prongsy] = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    sound(SPLAT);
-                    score += 50;
-                    upto500 += 50;
-                    prongsx++;
-                    if (prongsx > 64) {
-                        prongsx = 64;
-                    }
-                }
-            } else if (current_level[prongsx + 1][prongsy] == CHANGER) {
-                current_level[prongsx + 1][prongsy] = SPACE;
-                sound(CLICK);
-                CHANGE = ON;
-            } else if (current_level[prongsx + 1][prongsy] == EGG) {
-                if (current_level[prongsx + 2][prongsy] == SPACE) {
-                    current_level[prongsx + 2][prongsy] = EGG;
-                    current_level[prongsx + 1][prongsy] = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx++;
-                    sound(GRIND);
-                    if (prongsx > 64) {
-                        prongsx = 64;
-                    }
-                }
-            } else if (current_level[prongsx + 1][prongsy] == BOMB) {
-                if (current_level[prongsx + 2][prongsy] == SPACE) {
-                    current_level[prongsx + 2][prongsy] = BOMB;
-                    current_level[prongsx + 1][prongsy] = SPACE;
-                    *((*(current_level + prongsx)) + prongsy) = SPACE;
-                    prongsx++;
-                    sound(GRIND);
-                    if (prongsx > 64) {
-                        prongsx = 64;
-                    }
-                }
-            } else if (current_level[prongsx + 1][prongsy] == SAND) {
-                score++;
-                sound(SLURP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx++;
-                if (prongsx > 64) {
-                    prongsx = 64;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx + 1][prongsy] == SNAKE) {
-                score += 50;
-                upto500 += 50;
-                sound(WHINE);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx++;
-                if (prongsx > 64) {
-                    prongsx = 64;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx + 1][prongsy] == DIAMOND) {
-                score += 10;
-                upto500 += 10;
-                diamondcount--;
-                sound(WHEEP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx++;
-                if (prongsx > 64) {
-                    prongsx = 64;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else {
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsx++;
-                if (prongsx > 64) {
-                    prongsx = 64;
-                }
-            }
-            *((*(current_level + prongsx)) + prongsy) = PRONGS;
-        }
-
-        /*
-       *
-       *
-       *
-       *           *****************************
-       *                UP KEY PRESSED
-       *           *****************************
-       *
-       *
-       *
-       */
-        if (keyboard_keypressed(SCANCODE_Q) ||
-            keyboard_keypressed(SCANCODE_CURSORBLOCKUP)) {
-            PRONGS = PRONGSUP;
-            manimframe++;
-            if (manimframe > 3) {
-                manimframe = 0;
-            }
-            if (current_level[prongsx][prongsy - 1] == BRICK ||
-                current_level[prongsx][prongsy - 1] == ROCK) {
-            } else if (current_level[prongsx][prongsy - 1] == VIRUS) {
-            } else if (current_level[prongsx][prongsy - 1] == EGG) {
-            } else if (current_level[prongsx][prongsy - 1] == BOMB) {
-            } else if (current_level[prongsx][prongsy - 1] == CUBE) {
-            } else if (current_level[prongsx][prongsy - 1] == MORPHBLOCK) {
-            } else if (current_level[prongsx][prongsy - 1] == BEAST) {
-                sound(ROAR);
-                DIE = 1;
-            } else if (current_level[prongsx][prongsy - 1] == MAP) {
-                sound(MAPSOUND);
-                HASMAP = YES;
-                current_level[prongsx][prongsy - 1] = SPACE;
-            } else if (current_level[prongsx][prongsy - 1] == CHANGER) {
-                current_level[prongsx][prongsy - 1] = SPACE;
-                sound(CLICK);
-                CHANGE = ON;
-            } else if (current_level[prongsx][prongsy - 1] == SAND) {
-                score++;
-                sound(SLURP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy--;
-                if (prongsy < 0) {
-                    prongsy = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx][prongsy - 1] == SNAKE) {
-                score += 50;
-                upto500 += 50;
-                sound(WHINE);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy--;
-                if (prongsx < 0) {
-                    prongsx = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx][prongsy - 1] == DIAMOND) {
-                score += 10;
-                upto500 += 10;
-                diamondcount--;
-                sound(WHEEP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy--;
-                if (prongsy < 0) {
-                    prongsy = 0;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else {
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy--;
-                if (prongsy < 0) {
-                    prongsy = 0;
-                }
-            }
-            *((*(current_level + prongsx)) + prongsy) = PRONGS;
-        }
-
-
-        /*
-       *
-       *
-       *               ***************************
-       *                 DOWN KEY PRESSED
-       *               ***************************
-       *
-       *
-       *
-       */
-        if (keyboard_keypressed(SCANCODE_A) ||
-            keyboard_keypressed(SCANCODE_CURSORBLOCKDOWN)) {
-            PRONGS = PRONGSDOWN;
-            manimframe++;
-            if (manimframe > 3) {
-                manimframe = 0;
-            }
-            if (current_level[prongsx][prongsy + 1] == BRICK ||
-                current_level[prongsx][prongsy + 1] == ROCK) {
-            } else if (current_level[prongsx][prongsy + 1] == VIRUS) {
-            } else if (current_level[prongsx][prongsy + 1] == MORPHBLOCK) {
-            } else if (current_level[prongsx][prongsy + 1] == CUBE) {
-            } else if (current_level[prongsx][prongsy + 1] == EGG) {
-            } else if (current_level[prongsx][prongsy + 1] == BOMB) {
-            } else if (current_level[prongsx][prongsy + 1] == BEAST) {
-                sound(ROAR);
-                DIE = 1;
-            } else if (current_level[prongsx][prongsy + 1] == MAP) {
-                sound(MAPSOUND);
-                HASMAP = YES;
-                current_level[prongsx][prongsy + 1] = SPACE;
-            } else if (current_level[prongsx][prongsy + 1] == CHANGER) {
-                current_level[prongsx][prongsy + 1] = SPACE;
-                sound(CLICK);
-                CHANGE = ON;
-            } else if (current_level[prongsx][prongsy + 1] == SAND) {
-                score++;
-                sound(SLURP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy++;
-                if (prongsy > 47) {
-                    prongsy = 47;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx][prongsy + 1] == SNAKE) {
-                score += 50;
-                upto500 += 50;
-                sound(WHINE);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy++;
-                if (prongsx > 47) {
-                    prongsx = 47;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else if (current_level[prongsx][prongsy + 1] == DIAMOND) {
-                score += 10;
-                upto500 += 10;
-                diamondcount--;
-                sound(WHEEP);
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy++;
-                if (prongsy > 47) {
-                    prongsy = 47;
-                }
-                gravity[prongsx][prongsy - 1] = STATIONARY;
-            } else {   /* Rubout prongs */
-                *((*(current_level + prongsx)) + prongsy) = SPACE;
-                prongsy++;
-                if (prongsy > 47) {
-                    prongsy = 47;
-                }
-            }
-            *((*(current_level + prongsx)) + prongsy) = PRONGS;
-        }
-
-        /*
-       *
-       *
-       *         ****************************
-       *           MAP BUTTON
-       *         ****************************
-       *
-       *
-       */
-        if (keyboard_keypressed(SCANCODE_SPACE) && HASMAP == YES) {
-
-            sound(MAPSOUND);
-            display_map();
-            gl_copyscreen();
-            while (keyboard_keypressed(SCANCODE_SPACE)) {
-                keyboard_update();
-            }
-            gl_clearscreen(4);
-            gl_copyscreen();
-        }
-        /* Restart button */
-        if (keyboard_keypressed(SCANCODE_X)) {
-            DIE = 1;
-            copy_level(current);
-            reset_gravity();
-            CHANGE = OFF;
-            HASMAP = NO;
-            diamondcount = coords.no_of_diamonds + coords.no_of_morphers;
-        }
-        /* Suicide button */
-        if (keyboard_keypressed(SCANCODE_ESCAPE)) {
-            keyboard_clearstate();
-            DIE = 1;
-        }
-
-
-
-        /*
-       *
-       *
-       *
-       *    ***********************************
-       *     POST LOOP STUFF
-       *    ***********************************
-       *
-       *
-       *
-       */
-
-
-        draw_status();
-        draw_screen(prongsx, prongsy);
-        gl_copyscreen();
-
-        /* The 'what to do if you die' routine */
-        if (DIE == 1) {
-            DIE = 0;
-
-            mouse_reset();
-            sound(SCREAM);
-            *((*(current_level + prongsx)) + prongsy) = SPACE;
-            /* Screen pulse thingy */
-            gl_setcontext(&realscreen);
-            for (i = 17; i < 30; i++) {
-                gl_clearscreen(i);
-            }
-            for (i = 30; i > 16; i--) {
-                gl_clearscreen(i);
-            }
-            gl_setcontext(&virtualscreen);
-            LIVES--;
-            if (LIVES == 0) {
-                if (SOUND == ON) {
-                    sound(TOC);
-                    sleep(5);
-                }
-                keyboard_close();
-                return EXIT_FAILURE;
-            }
-            prongsx = coords.x;
-            prongsy = coords.y;
-            current_level[prongsx][prongsy] = PRONGS;
-            gl_clearscreen(4);
-            gl_copyscreen();
-        }
-
-
-        /* The 'what you do if you win' routine */
-        if (diamondcount == 0) {
-            gl_clearscreen(0);
-            for (i = 0; i < 17; i++) {
-                sound(i);
-            }
-            sleep(3);
-            keyboard_close();
-            return EXIT_SUCCESS;
-        }
-
-        /* The 'update the smiley's bit! */
-        if (upto500 > 500) {
-            score_block[smiley_posn]++;
-            if (score_block[smiley_posn] == 15) {
-                smiley_posn++;
-                if (smiley_posn == 4) {
-                    smiley_posn = 0;
-                }
-            }
-            upto500 = 0;
-        }
-
-        /* The 'chunter along as usual' routine */
-        animframe++;
-        if (animframe > 3) {
-            animframe = 0;
-        }
-        Monstermoved = NO;
-        Cubemoved = NO;
-        Virusmoved = NO;
-        uint32_t frameTime = SDL_GetTicks() - frameStart;
-
-        // This keeps us from displaying more frames than intended FPS
-        if (frameDelayGame > frameTime) {
-            SDL_Delay(frameDelayGame - frameTime);
-        }
-    }
-    gl_freecontext(&realscreen);
-    gl_freecontext(&virtualscreen);
-}
 
 /*
  *
@@ -1547,28 +894,14 @@ int main_loop(void) {
  *
  *
  */
-int play_the_game(void) {
-    int ALIVE = YES;
 
-    while (ALIVE == YES) {
-        if (main_loop() == EXIT_FAILURE) {
-            gl_clearscreen(0);
-            ALIVE = NO;
-        } else {
-            current++;
-            if (current > NO_OF_LEVELS) {
-                ALIVE = NO;
-            }
-        }
-    }
-    return EXIT_SUCCESS;
+// Modified play_the_game function
+void play_the_game(void) {
+    ALIVE = YES;
+    current_game_state = 1; // Set state to main game
 }
 
-/* Title Page bit */
-int title_page(void) {
-    GraphicsContext realscreen, static_picture;
-    int mt, mX, mY, PLAY, row, col;
-    int beastx, beasty, i, j, x, y;
+void initialize_title_page(void) {
     beastx = 100;
     beasty = 100;
     gl_setcontextvga(10);
@@ -1576,6 +909,10 @@ int title_page(void) {
     gl_getcontext(&realscreen);
     gl_setcontextvgavirtual(10);
     gl_clearscreen(0);
+
+    // Draw Static bits and store in static_picture
+    // ... (Keep all the initialization code here, including the tile background,
+    // printing 'LIZARDS', controls, buttons, etc.)
     /* Draw Static bits and store in static_picture */
 
     /* Tile background */
@@ -1622,12 +959,12 @@ int title_page(void) {
     /* Writ by bit */
     gl_putboxmask(304, 288, 32, 32, f_graphics[f_WRIT1]);
     gl_putboxmask(336, 288, 32, 32, f_graphics[f_WRIT2]);
+
     gl_getcontext(&static_picture);
-    /* Loop around until 'PLAY' selected */
-    gl_setcontextvgavirtual(10);
+
+    // Mouse initialization
     mt = vga_getmousetype();
     printf("Initialising mouse......");
-
     if (mouse_init("/dev/mouse", mt, 150) == -1) {
         printf("Can't open mouse.....is gpm running ? \n");
         exit(1);
@@ -1641,50 +978,34 @@ int title_page(void) {
     printf("done\n");
     PLAY = YES;
 
-    /* Do cool screen drawing thingy */
+    // Do cool screen drawing thingy
     if (SOUND == ON) {
         sound(END);
     }
-    for (i = 0; i < 80; i++) {
+    for (int i = 0; i < 80; i++) {
         gl_copyboxfromcontext(&static_picture, 0, 0, (i << 3), 480, 640 - (i << 3), 0);
         gl_copyscreen();
     }
 
-    while (PLAY == YES) {
+    animframe = 0;
+}
+
+void main_em_loop(void) {
+    int i, j, x, y;
+    if (PLAY == YES) {
         uint32_t frameStart = SDL_GetTicks();
         gl_copyboxfromcontext(&static_picture, 0, 0, 639, 479, 0, 0);
         mX = mouse_getx();
         mY = mouse_gety();
 
-        /* This bit moves the beastie around */
-        animframe++;
-        if (animframe > 3) {
-            animframe = 0;
-        }
-        if (beastx > mX) {
-            beastx -= 8;
-        }
-        if (beastx < mX) {
-            beastx += 8;
-        }
-        if (beasty > mY) {
-            beasty -= 8;
-        }
-        if (beasty < mY) {
-            beasty += 8;
-        }
-        if (beastx > 608) {
-            beastx = 608;
-        }
-        if (beastx < 32) {
-            beastx = 32;
-        }
-        if (beasty > 448) {
-            beasty = 448;
-        }
-        if (beasty < 32) {
-            beasty = 32;
-        }
+        // Move the beastie
+        animframe = (animframe + 1) % 4;
+        if (beastx > mX) beastx -= 8;
+        if (beastx < mX) beastx += 8;
+        if (beasty > mY) beasty -= 8;
+        if (beasty < mY) beasty += 8;
+        beastx = (beastx < 32) ? 32 : (beastx > 608) ? 608 : beastx;
+        beasty = (beasty < 32) ? 32 : (beasty > 448) ? 448 : beasty;
 
         /* And hence the beastie is printED */
 
@@ -1772,12 +1093,819 @@ int title_page(void) {
         if (frameDelayTitle > frameTime) {
             SDL_Delay(frameDelayTitle - frameTime);
         }
+    } else {
+        // Clean up and exit
+        mouse_close();
+        gl_freecontext(&realscreen);
+        gl_freecontext(&static_picture);
+        emscripten_cancel_main_loop(); // Add this for Emscripten
     }
+}
+
+// Function prototypes
+void update_title_page(void);
+
+void update_main_game(void);
+
+void update_editor(void);
+
+void initialize_main_game(void);
+
+void initialize_editor(void);
+
+// Main emscripten loop function
+void cleanup_title_page(void);
+void cleanup_main_game(void);
+void cleanup_editor(void);
+
+// Main emscripten loop function
+void emscripten_main_loop(void) {
+    // Check if the game state has changed
+    if (current_game_state != previous_game_state) {
+        // Perform cleanup for the previous state
+        switch (previous_game_state) {
+            case 0:
+                cleanup_title_page();
+                break;
+            case 1:
+                cleanup_main_game();
+                break;
+            case 2:
+                cleanup_editor();
+                break;
+        }
+
+        // Perform initialization for the new state
+        switch (current_game_state) {
+            case 0:
+                initialize_title_page();
+                break;
+            case 1:
+                initialize_main_game();
+                break;
+            case 2:
+                initialize_editor();
+                break;
+        }
+        previous_game_state = current_game_state;
+    }
+
+    // Update the current game state
+    switch (current_game_state) {
+        case 0:
+            update_title_page();
+            break;
+        case 1:
+            update_main_game();
+            break;
+        case 2:
+            update_editor();
+            break;
+    }
+}
+
+void cleanup_title_page(void) {
+    // Add any necessary cleanup for the title page
+    // For example, freeing resources, resetting variables, etc.
     mouse_close();
+    keyboard_close();
     gl_freecontext(&realscreen);
     gl_freecontext(&static_picture);
-    return EXIT_SUCCESS;
 }
+
+
+// Title page update function (already Emscripten-compatible)
+void update_title_page(void) {
+    main_em_loop();
+    if (PLAY == NO) {
+        emscripten_cancel_main_loop();
+    }
+}
+
+int i, smiley_posn;
+start_t coords;
+GraphicsContext realscreen, virtualscreen;
+
+// Main game initialization function
+void initialize_main_game(void) {
+    // Move initialization code from main_loop here
+    PRONGS = PRONGSDOWN;
+    copy_level(current);
+    reset_gravity();
+    coords = find_start(current);
+    diamondcount = coords.no_of_diamonds + coords.no_of_morphers;
+    prongsx = coords.x;
+    prongsy = coords.y;
+    LIVES = 3;
+    keyboard_init();
+    for (i = 0; i < 4; i++) {
+        score_block[i] = 0;
+    }
+    upto500 = 0;
+    smiley_posn = 0;
+    CHANGE = OFF;
+    HASMAP = NO;
+    gl_setcontextvga(10);
+    gl_getcontext(&realscreen);
+    gl_setcontextvgavirtual(10);
+    gl_getcontext(&virtualscreen);
+
+    gl_clearscreen(4);
+    draw_status();
+    draw_screen(prongsx, prongsy);
+    gl_copyscreen();
+    sound(END);
+    // ... (other initialization code)
+}
+
+void cleanup_main_game(void) {
+    gl_freecontext(&realscreen);
+    gl_freecontext(&virtualscreen);
+    keyboard_close();
+}
+
+// Modified main_loop function
+int main_loop_iteration(void) {
+    // ... (existing code from main_loop, but without initialization and the while loop)
+    // Handle a single frame update
+    // Return EXIT_FAILURE, EXIT_SUCCESS, or 0 to continue
+    uint32_t frameStart = SDL_GetTicks();
+    keyboard_update();
+    update_level();
+    /*
+   *
+   *        *************************************
+   *           LEFT KEY PRESSED
+   *        *************************************
+   *
+   */
+
+    if (keyboard_keypressed(SCANCODE_O) ||
+        keyboard_keypressed(SCANCODE_CURSORBLOCKLEFT)) {
+        PRONGS = PRONGSLEFT;
+        manimframe++;
+        if (manimframe > 3) {
+            manimframe = 0;
+        }
+        if (*((*(current_level + (prongsx - 1))) + prongsy) == BRICK) {
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == VIRUS) {
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == CUBE) {
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == MORPHBLOCK) {
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == MAP) {
+            sound(MAPSOUND);
+            HASMAP = YES;
+            *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == ROCK) {
+            if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
+                *((*(current_level + (prongsx - 2))) + prongsy) = ROCK;
+                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx--;
+                sound(GRIND);
+                if (prongsx < 0) {
+                    prongsx = 0;
+                }
+            }
+            if (*((*(current_level + (prongsx - 2))) + prongsy) == BEAST) {
+                *((*(current_level + (prongsx - 2))) + prongsy) = ROCK;
+                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx--;
+                if (prongsx < 0) {
+                    prongsx = 0;
+                }
+                sound(SPLAT);
+                score += 50;
+                upto500 += 50;
+            }
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == EGG) {
+            if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
+                *((*(current_level + (prongsx - 2))) + prongsy) = EGG;
+                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx--;
+                sound(GRIND);
+                if (prongsx < 0) {
+                    prongsx = 0;
+                }
+            }
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == BOMB) {
+            if (*((*(current_level + (prongsx - 2))) + prongsy) == SPACE) {
+                *((*(current_level + (prongsx - 2))) + prongsy) = BOMB;
+                *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx--;
+                sound(GRIND);
+                if (prongsx < 0) {
+                    prongsx = 0;
+                }
+            }
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == CHANGER) {
+            *((*(current_level + (prongsx - 1))) + prongsy) = SPACE;
+            sound(CLICK);
+            CHANGE = ON;
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == SAND) {
+            score++;
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            sound(SLURP);
+            prongsx--;
+            if (prongsx < 0) {
+                prongsx = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == SNAKE) {
+            score += 50;
+            upto500 += 50;
+            sound(WHINE);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx--;
+            if (prongsx < 0) {
+                prongsx = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (*((*(current_level + (prongsx - 1))) + prongsy) == DIAMOND) {
+            score += 10;
+            upto500 += 10;
+            diamondcount--;
+            sound(WHEEP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx--;
+            if (prongsx < 0) {
+                prongsx = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else {
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx--;
+            if (prongsx < 0) {
+                prongsx = 0;
+            }
+        }
+        *((*(current_level + prongsx)) + prongsy) = PRONGS;
+    }
+
+    /*
+   *
+   *
+   *
+   *              ********************************
+   *                RIGHT KEY PRESSED
+   *              ********************************
+   *
+   *
+   *
+   */
+    if (keyboard_keypressed(SCANCODE_P) ||
+        keyboard_keypressed(SCANCODE_CURSORBLOCKRIGHT)) {
+        PRONGS = PRONGSRIGHT;
+        manimframe++;
+        if (manimframe > 3) {
+            manimframe = 0;
+        }
+        if (current_level[prongsx + 1][prongsy] == BRICK) {
+        } else if (current_level[prongsx + 1][prongsy] == VIRUS) {
+        } else if (current_level[prongsx + 1][prongsy] == MORPHBLOCK) {
+        } else if (current_level[prongsx + 1][prongsy] == CUBE) {
+        } else if (current_level[prongsx + 1][prongsy] == BEAST) {
+            sound(ROAR);
+            DIE = 1;
+        } else if (current_level[prongsx + 1][prongsy] == MAP) {
+            sound(MAPSOUND);
+            HASMAP = YES;
+            current_level[prongsx + 1][prongsy] = SPACE;
+        } else if (current_level[prongsx + 1][prongsy] == ROCK) {
+            if (current_level[prongsx + 2][prongsy] == SPACE) {
+                current_level[prongsx + 2][prongsy] = ROCK;
+                current_level[prongsx + 1][prongsy] = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                sound(GRIND);
+                prongsx++;
+                if (prongsx > 64) {
+                    prongsx = 64;
+                }
+            }
+            if (current_level[prongsx + 2][prongsy] == BEAST) {
+                current_level[prongsx + 2][prongsy] = ROCK;
+                current_level[prongsx + 1][prongsy] = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                sound(SPLAT);
+                score += 50;
+                upto500 += 50;
+                prongsx++;
+                if (prongsx > 64) {
+                    prongsx = 64;
+                }
+            }
+        } else if (current_level[prongsx + 1][prongsy] == CHANGER) {
+            current_level[prongsx + 1][prongsy] = SPACE;
+            sound(CLICK);
+            CHANGE = ON;
+        } else if (current_level[prongsx + 1][prongsy] == EGG) {
+            if (current_level[prongsx + 2][prongsy] == SPACE) {
+                current_level[prongsx + 2][prongsy] = EGG;
+                current_level[prongsx + 1][prongsy] = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx++;
+                sound(GRIND);
+                if (prongsx > 64) {
+                    prongsx = 64;
+                }
+            }
+        } else if (current_level[prongsx + 1][prongsy] == BOMB) {
+            if (current_level[prongsx + 2][prongsy] == SPACE) {
+                current_level[prongsx + 2][prongsy] = BOMB;
+                current_level[prongsx + 1][prongsy] = SPACE;
+                *((*(current_level + prongsx)) + prongsy) = SPACE;
+                prongsx++;
+                sound(GRIND);
+                if (prongsx > 64) {
+                    prongsx = 64;
+                }
+            }
+        } else if (current_level[prongsx + 1][prongsy] == SAND) {
+            score++;
+            sound(SLURP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx++;
+            if (prongsx > 64) {
+                prongsx = 64;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx + 1][prongsy] == SNAKE) {
+            score += 50;
+            upto500 += 50;
+            sound(WHINE);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx++;
+            if (prongsx > 64) {
+                prongsx = 64;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx + 1][prongsy] == DIAMOND) {
+            score += 10;
+            upto500 += 10;
+            diamondcount--;
+            sound(WHEEP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx++;
+            if (prongsx > 64) {
+                prongsx = 64;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else {
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsx++;
+            if (prongsx > 64) {
+                prongsx = 64;
+            }
+        }
+        *((*(current_level + prongsx)) + prongsy) = PRONGS;
+    }
+
+    /*
+   *
+   *
+   *
+   *           *****************************
+   *                UP KEY PRESSED
+   *           *****************************
+   *
+   *
+   *
+   */
+    if (keyboard_keypressed(SCANCODE_Q) ||
+        keyboard_keypressed(SCANCODE_CURSORBLOCKUP)) {
+        PRONGS = PRONGSUP;
+        manimframe++;
+        if (manimframe > 3) {
+            manimframe = 0;
+        }
+        if (current_level[prongsx][prongsy - 1] == BRICK ||
+            current_level[prongsx][prongsy - 1] == ROCK) {
+        } else if (current_level[prongsx][prongsy - 1] == VIRUS) {
+        } else if (current_level[prongsx][prongsy - 1] == EGG) {
+        } else if (current_level[prongsx][prongsy - 1] == BOMB) {
+        } else if (current_level[prongsx][prongsy - 1] == CUBE) {
+        } else if (current_level[prongsx][prongsy - 1] == MORPHBLOCK) {
+        } else if (current_level[prongsx][prongsy - 1] == BEAST) {
+            sound(ROAR);
+            DIE = 1;
+        } else if (current_level[prongsx][prongsy - 1] == MAP) {
+            sound(MAPSOUND);
+            HASMAP = YES;
+            current_level[prongsx][prongsy - 1] = SPACE;
+        } else if (current_level[prongsx][prongsy - 1] == CHANGER) {
+            current_level[prongsx][prongsy - 1] = SPACE;
+            sound(CLICK);
+            CHANGE = ON;
+        } else if (current_level[prongsx][prongsy - 1] == SAND) {
+            score++;
+            sound(SLURP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy--;
+            if (prongsy < 0) {
+                prongsy = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx][prongsy - 1] == SNAKE) {
+            score += 50;
+            upto500 += 50;
+            sound(WHINE);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy--;
+            if (prongsx < 0) {
+                prongsx = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx][prongsy - 1] == DIAMOND) {
+            score += 10;
+            upto500 += 10;
+            diamondcount--;
+            sound(WHEEP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy--;
+            if (prongsy < 0) {
+                prongsy = 0;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else {
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy--;
+            if (prongsy < 0) {
+                prongsy = 0;
+            }
+        }
+        *((*(current_level + prongsx)) + prongsy) = PRONGS;
+    }
+
+
+    /*
+   *
+   *
+   *               ***************************
+   *                 DOWN KEY PRESSED
+   *               ***************************
+   *
+   *
+   *
+   */
+    if (keyboard_keypressed(SCANCODE_A) ||
+        keyboard_keypressed(SCANCODE_CURSORBLOCKDOWN)) {
+        PRONGS = PRONGSDOWN;
+        manimframe++;
+        if (manimframe > 3) {
+            manimframe = 0;
+        }
+        if (current_level[prongsx][prongsy + 1] == BRICK ||
+            current_level[prongsx][prongsy + 1] == ROCK) {
+        } else if (current_level[prongsx][prongsy + 1] == VIRUS) {
+        } else if (current_level[prongsx][prongsy + 1] == MORPHBLOCK) {
+        } else if (current_level[prongsx][prongsy + 1] == CUBE) {
+        } else if (current_level[prongsx][prongsy + 1] == EGG) {
+        } else if (current_level[prongsx][prongsy + 1] == BOMB) {
+        } else if (current_level[prongsx][prongsy + 1] == BEAST) {
+            sound(ROAR);
+            DIE = 1;
+        } else if (current_level[prongsx][prongsy + 1] == MAP) {
+            sound(MAPSOUND);
+            HASMAP = YES;
+            current_level[prongsx][prongsy + 1] = SPACE;
+        } else if (current_level[prongsx][prongsy + 1] == CHANGER) {
+            current_level[prongsx][prongsy + 1] = SPACE;
+            sound(CLICK);
+            CHANGE = ON;
+        } else if (current_level[prongsx][prongsy + 1] == SAND) {
+            score++;
+            sound(SLURP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy++;
+            if (prongsy > 47) {
+                prongsy = 47;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx][prongsy + 1] == SNAKE) {
+            score += 50;
+            upto500 += 50;
+            sound(WHINE);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy++;
+            if (prongsx > 47) {
+                prongsx = 47;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else if (current_level[prongsx][prongsy + 1] == DIAMOND) {
+            score += 10;
+            upto500 += 10;
+            diamondcount--;
+            sound(WHEEP);
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy++;
+            if (prongsy > 47) {
+                prongsy = 47;
+            }
+            gravity[prongsx][prongsy - 1] = STATIONARY;
+        } else {   /* Rubout prongs */
+            *((*(current_level + prongsx)) + prongsy) = SPACE;
+            prongsy++;
+            if (prongsy > 47) {
+                prongsy = 47;
+            }
+        }
+        *((*(current_level + prongsx)) + prongsy) = PRONGS;
+    }
+
+    /*
+   *
+   *
+   *         ****************************
+   *           MAP BUTTON
+   *         ****************************
+   *
+   *
+   */
+    if (keyboard_keypressed(SCANCODE_SPACE) && HASMAP == YES) {
+
+        sound(MAPSOUND);
+        display_map();
+        gl_copyscreen();
+        while (keyboard_keypressed(SCANCODE_SPACE)) {
+            keyboard_update();
+        }
+        gl_clearscreen(4);
+        gl_copyscreen();
+    }
+    /* Restart button */
+    if (keyboard_keypressed(SCANCODE_X)) {
+        DIE = 1;
+        copy_level(current);
+        reset_gravity();
+        CHANGE = OFF;
+        HASMAP = NO;
+        diamondcount = coords.no_of_diamonds + coords.no_of_morphers;
+    }
+    /* Suicide button */
+    if (keyboard_keypressed(SCANCODE_ESCAPE)) {
+        keyboard_clearstate();
+        DIE = 1;
+    }
+
+
+
+    /*
+   *
+   *
+   *
+   *    ***********************************
+   *     POST LOOP STUFF
+   *    ***********************************
+   *
+   *
+   *
+   */
+
+
+    draw_status();
+    draw_screen(prongsx, prongsy);
+    gl_copyscreen();
+
+    /* The 'what to do if you die' routine */
+    if (DIE == 1) {
+        DIE = 0;
+
+        mouse_reset();
+        sound(SCREAM);
+        *((*(current_level + prongsx)) + prongsy) = SPACE;
+        /* Screen pulse thingy */
+        gl_setcontext(&realscreen);
+        for (i = 17; i < 30; i++) {
+            gl_clearscreen(i);
+        }
+        for (i = 30; i > 16; i--) {
+            gl_clearscreen(i);
+        }
+        gl_setcontext(&virtualscreen);
+        LIVES--;
+        if (LIVES == 0) {
+            if (SOUND == ON) {
+                sound(TOC);
+                sleep(5);
+            }
+            keyboard_close();
+            return GAME_OVER;
+        }
+        prongsx = coords.x;
+        prongsy = coords.y;
+        current_level[prongsx][prongsy] = PRONGS;
+        gl_clearscreen(4);
+        gl_copyscreen();
+    }
+
+
+    /* The 'what you do if you win' routine */
+    if (diamondcount == 0) {
+        gl_clearscreen(0);
+        for (i = 0; i < 17; i++) {
+            sound(i);
+        }
+        sleep(3);
+        keyboard_close();
+        return GAME_NEXT_LEVEL;
+    }
+
+    /* The 'update the smiley's bit! */
+    if (upto500 > 500) {
+        score_block[smiley_posn]++;
+        if (score_block[smiley_posn] == 15) {
+            smiley_posn++;
+            if (smiley_posn == 4) {
+                smiley_posn = 0;
+            }
+        }
+        upto500 = 0;
+    }
+
+    /* The 'chunter along as usual' routine */
+    animframe++;
+    if (animframe > 3) {
+        animframe = 0;
+    }
+    Monstermoved = NO;
+    Cubemoved = NO;
+    Virusmoved = NO;
+    uint32_t frameTime = SDL_GetTicks() - frameStart;
+
+    // This keeps us from displaying more frames than intended FPS
+    if (frameDelayGame > frameTime) {
+        SDL_Delay(frameDelayGame - frameTime);
+    }
+    return GAME_CONTINUE;
+}
+
+// Main game update function
+void update_main_game(void) {
+    if (ALIVE == YES) {
+        main_loop_result = main_loop_iteration();
+        switch (main_loop_result) {
+            case GAME_NEXT_LEVEL:
+                current++;
+                if (current > NO_OF_LEVELS) {
+                    ALIVE = NO;
+                    current_game_state = 0; // Return to title screen
+                } else {
+                    // Re-initialize for the next level
+                    cleanup_main_game();
+                    initialize_main_game();
+                }
+                break;
+            case GAME_OVER:
+                gl_clearscreen(0);
+                ALIVE = NO;
+                current_game_state = 0; // Return to title screen
+                break;
+            case GAME_QUIT:
+                ALIVE = NO;
+                current_game_state = 0; // Return to title screen
+                break;
+            case GAME_CONTINUE:
+            default:
+                // Continue the game
+                break;
+        }
+    }
+}
+
+// Editor initialization function
+void initialize_editor(void) {
+    // Move initialization code from main_edit_loop here
+    cur_level = 0;
+    xp = yp = 0;
+    xpos = ypos = 0;
+    keyboard_init();
+    mouse_reset();
+    gl_setcontextvga(10);
+    gl_getcontext(&realscreen);
+    gl_setcontextvgavirtual(10);
+    gl_getcontext(&virtualscreen);
+    current_block = 0;
+    // ... (other initialization code)
+}
+
+void cleanup_editor(void) {
+    keyboard_close();
+}
+
+// Modified main_edit_loop function
+int main_edit_loop_iteration(void) {
+    // ... (existing code from main_edit_loop, but without initialization and the while loop)
+    // Handle a single frame update
+    // Return EXIT_SUCCESS when editor should be closed, or 0 to continue
+    uint32_t frameStart = SDL_GetTicks();
+    keyboard_update();
+
+    if (keyboard_keypressed(SCANCODE_Q)) {
+        yp--;
+        if (yp < 0) {
+            yp = 0;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_A)) {
+        yp++;
+        if (yp > 47) {
+            yp = 47;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_O)) {
+        xp--;
+        if (xp < 0) {
+            xp = 0;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_P)) {
+        xp++;
+        if (xp > 63) {
+            xp = 63;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_CURSORBLOCKUP)) {
+        current_block += 4;
+        if (current_block > 255) {
+            current_block = 0;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_CURSORBLOCKDOWN)) {
+        current_block -= 4;
+        if (current_block < 0) {
+            current_block = 0;
+        }
+    }
+
+    if (keyboard_keypressed(SCANCODE_CURSORUP)) {
+        cur_level++;
+        if (cur_level > 19) {
+            cur_level = 19;
+        }
+    }
+    if (keyboard_keypressed(SCANCODE_CURSORDOWN)) {
+        cur_level--;
+        if (cur_level < 0) {
+            cur_level = 0;
+        }
+    }
+
+    if (keyboard_keypressed(SCANCODE_SPACE)) {
+        levels[cur_level][xp][yp] = current_block;
+    }
+    if (keyboard_keypressed(SCANCODE_F1)) {
+        for (i = 0; i < 64; i++) {
+            for (j = 0; j < 48; j++) {
+                levels[cur_level][i][j] = SPACE;
+            }
+        }
+    }
+
+
+    if (keyboard_keypressed(SCANCODE_ESCAPE)) {
+        infile = fopen("levelshi", "wb");
+        for (lev = 0; lev < 20; lev++) {
+            for (xp = 0; xp < 64; xp++) {
+                for (yp = 0; yp < 48; yp++) {
+                    if (levels[lev][xp][yp] == 64) {
+                        levels[lev][xp][yp] = 4;
+                    }
+                    fwrite(&(levels[lev][xp][yp]), 1, 1, infile);
+                }
+            }
+        }
+        fclose(infile);
+        keyboard_close();
+        return GAME_QUIT;
+    }
+
+    for (col = 0; col < 64; col++) {
+        for (row = 0; row < 48; row++) {
+            gl_putbox(col * 10, row * 10, 10, 10, map_graphics[levels[cur_level][col][row]]);
+        }
+    }
+    gl_putboxmask(xp * 10, yp * 10, 10, 10, map_graphics[current_block]);
+    gl_copyscreen();
+
+    uint32_t frameTime = SDL_GetTicks() - frameStart;
+
+    // This keeps us from displaying more frames than intended FPS
+    if (frameDelayEditor > frameTime) {
+        SDL_Delay(frameDelayEditor - frameTime);
+    }
+    return GAME_CONTINUE;
+}
+
+// Editor update function
+void update_editor(void) {
+    int result = main_edit_loop_iteration();
+    if (result == GAME_QUIT) {
+        current_game_state = 0; // Return to title screen
+    }
+}
+
 
 
 int main(void) {
@@ -1796,7 +1924,18 @@ int main(void) {
     initialise();
 
     printf("Entering title page...\n");
-    title_page();
+    initialize_title_page();
+
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(emscripten_main_loop, 0, 1);
+#else
+    while (1) {
+        emscripten_main_loop();
+        if (current_game_state == 0 && PLAY == NO) {
+            break;
+        }
+    }
+#endif
 
     printf("Cleaning up...\n");
     if (SOUND == ON) {
