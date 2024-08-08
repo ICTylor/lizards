@@ -866,7 +866,7 @@ void draw_status(void) {
 
 
 int main_edit_loop(void) {
-
+    current_game_state = 2;
     keyboard_close();
     return EXIT_SUCCESS;
 }
@@ -1924,7 +1924,6 @@ int main(void) {
     initialise();
 
     printf("Entering title page...\n");
-    initialize_title_page();
 
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(emscripten_main_loop, 0, 1);
