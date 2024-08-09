@@ -1,6 +1,8 @@
 #ifndef SVGALIB_COMPAT_H
 #define SVGALIB_COMPAT_H
 
+#include <emscripten.h>
+#include <emscripten/html5.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <stdbool.h>
@@ -56,6 +58,7 @@ int mouse_getbutton(void);
 void mouse_update(void);
 void mouse_close(void);
 void mouse_reset(void);
+
 
 void test_draw(void);
 

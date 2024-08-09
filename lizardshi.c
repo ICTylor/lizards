@@ -13,6 +13,7 @@
  */
 
 #include<emscripten.h>
+#include<emscripten/html5.h>
 #include<stdlib.h>
 #include<stdio.h>
 #include"svgalib_compat.h"
@@ -165,7 +166,7 @@ int FALLING_DIAMONDS = ON;
 Sample samps[20];
 
 const int GAME_FPS = 8;
-const int TITLE_FPS = 20;
+const int TITLE_FPS = 16;
 const int EDITOR_FPS = 8;
 const int frameDelayGame = 1000 / GAME_FPS;
 const int frameDelayTitle = 1000 / TITLE_FPS;
@@ -1911,6 +1912,7 @@ void update_editor(void) {
 int main(void) {
     printf("Starting initialization...\n");
 
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_WARP_MOTION, "1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
         return 1;

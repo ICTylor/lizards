@@ -55,6 +55,62 @@ int mouse_gety(void);
 int mouse_getbutton(void);
 void mouse_update(void);
 void mouse_close(void);
+int process_events(void);
+
+int process_events() {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        switch (event.type) {
+            case SDL_MOUSEMOTION:
+                mouse_x += event.motion.xrel;
+                if (mouse_x > screen_width - 40) mouse_x = screen_width - 40;
+                if (mouse_x < 0) mouse_x = 0;
+                mouse_y += event.motion.yrel;
+                if (mouse_y > screen_height - 40) mouse_y = screen_height - 40;
+                if (mouse_y < 0) mouse_y = 0;
+                break;
+            case SDL_MOUSEBUTTONDOWN:
+                mouse_buttons |= SDL_BUTTON(event.button.button);
+                break;
+            case SDL_MOUSEBUTTONUP:
+                mouse_buttons &= ~SDL_BUTTON(event.button.button);
+                break;
+            case SDL_WINDOWEVENT:
+                if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+                    printf("resized\n");
+                }
+                break;
+            case SDL_QUIT:
+                return -1;  // Signal to quit the program
+            case SDL_KEYDOWN:
+                keyboard_state[event.key.keysym.scancode] = 1;
+                break;
+            case SDL_KEYUP:
+                keyboard_state[event.key.keysym.scancode] = 0;
+                break;
+        }
+    }
+    return 0;
+}
+
+EM_BOOL on_canvassize_changed(int eventType, const void *reserved, void *userData) {
+    int w, h;
+    emscripten_get_canvas_element_size("#canvas", &w, &h);
+    double cssW, cssH;
+    emscripten_get_element_css_size("#canvas", &cssW, &cssH);
+    printf("Canvas resized: WebGL RTT size: %dx%d, canvas CSS size: %02gx%02g\n", w, h, cssW, cssH);
+    return 0;
+}
+
+void enterSoftFullscreen(int scaleMode, int canvasResolutionScaleMode, int filteringMode) {
+    EmscriptenFullscreenStrategy s;
+    memset(&s, 0, sizeof(s));
+    s.scaleMode = scaleMode;
+    s.canvasResolutionScaleMode = canvasResolutionScaleMode;
+    s.filteringMode = filteringMode;
+    s.canvasResizedCallback = on_canvassize_changed;
+    EMSCRIPTEN_RESULT ret = emscripten_enter_soft_fullscreen("#canvas", &s);
+}
 
 int vga_init(void) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
@@ -63,11 +119,10 @@ int vga_init(void) {
     }
 
     window = SDL_CreateWindow("Lizards",
-                              SDL_WINDOWPOS_UNDEFINED,
-                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                               screen_width,
                               screen_height,
-                              SDL_WINDOW_SHOWN);
+                              SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
         return -1;
@@ -101,6 +156,8 @@ int vga_init(void) {
     init_default_palette();
     // Force the window to show
     SDL_ShowWindow(window);
+
+    enterSoftFullscreen(EMSCRIPTEN_FULLSCREEN_SCALE_CENTER, EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_NONE, EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT);
 
     return 0;
 }
@@ -325,17 +382,7 @@ void keyboard_close(void) {
 
 // Update keyboard state
 int keyboard_update(void) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) {
-            return -1;  // Signal to quit the program
-        } else if (event.type == SDL_KEYDOWN) {
-            keyboard_state[event.key.keysym.scancode] = 1;
-        } else if (event.type == SDL_KEYUP) {
-            keyboard_state[event.key.keysym.scancode] = 0;
-        }
-    }
-    return 0;
+    return process_events();
 }
 
 // Check if a key is pressed
@@ -545,21 +592,7 @@ int mouse_getbutton(void) {
 }
 
 void mouse_update(void) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            case SDL_MOUSEMOTION:
-                mouse_x += event.motion.xrel;
-                mouse_y += event.motion.yrel;
-                break;
-            case SDL_MOUSEBUTTONDOWN:
-                mouse_buttons |= SDL_BUTTON(event.button.button);
-                break;
-            case SDL_MOUSEBUTTONUP:
-                mouse_buttons &= ~SDL_BUTTON(event.button.button);
-                break;
-        }
-    }
+    process_events();
 }
 
 void mouse_close(void) {
