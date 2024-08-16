@@ -1,0 +1,7 @@
+*.o
+lizardshi
+*/
+lizardshi.data
+lizardshi.html
+lizardshi.js
+lizardshi.wasm*
