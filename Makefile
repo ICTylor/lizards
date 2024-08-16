@@ -9,7 +9,7 @@ OUTPUT = lizardshi.html
 SOURCES = lizardshi.c svgalib_compat.c soundIt.c
 OBJECTS = $(SOURCES:.c=.o)
 
-EMFLAGS = -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY=1 -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']
+EMFLAGS = -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY=1 -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap'] --shell-file sdl2_template.html
 DEBUGFLAGS = -s ASSERTIONS=1 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=1 -s DEMANGLE_SUPPORT=1
 MAPFLAGS = -gsource-map --source-map-base http://localhost:8000/
 

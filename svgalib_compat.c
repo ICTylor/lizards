@@ -93,24 +93,7 @@ int process_events() {
     return 0;
 }
 
-EM_BOOL on_canvassize_changed(int eventType, const void *reserved, void *userData) {
-    int w, h;
-    emscripten_get_canvas_element_size("#canvas", &w, &h);
-    double cssW, cssH;
-    emscripten_get_element_css_size("#canvas", &cssW, &cssH);
-    printf("Canvas resized: WebGL RTT size: %dx%d, canvas CSS size: %02gx%02g\n", w, h, cssW, cssH);
-    return 0;
-}
 
-void enterSoftFullscreen(int scaleMode, int canvasResolutionScaleMode, int filteringMode) {
-    EmscriptenFullscreenStrategy s;
-    memset(&s, 0, sizeof(s));
-    s.scaleMode = scaleMode;
-    s.canvasResolutionScaleMode = canvasResolutionScaleMode;
-    s.filteringMode = filteringMode;
-    s.canvasResizedCallback = on_canvassize_changed;
-    EMSCRIPTEN_RESULT ret = emscripten_enter_soft_fullscreen("#canvas", &s);
-}
 
 int vga_init(void) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
@@ -157,7 +140,13 @@ int vga_init(void) {
     // Force the window to show
     SDL_ShowWindow(window);
 
-    enterSoftFullscreen(EMSCRIPTEN_FULLSCREEN_SCALE_CENTER, EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_NONE, EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT);
+    EM_ASM({
+        var canvas = Module.canvas;
+        if (canvas) {
+            canvas.style.width = "min(95vw, calc(95vh * (4/3)))";
+            canvas.style.height = "min(calc(95vw * (3/4)), 95vh)";
+        }
+    });
 
     return 0;
 }
@@ -629,7 +618,7 @@ void test_draw(void) {
     }
 
     // Update the screen
-    gl_copyscreen(NULL);
+    gl_copyscreen();
 }
 
 
