@@ -992,7 +992,7 @@ void initialize_title_page(void) {
 }
 
 void main_em_loop(void) {
-    int i, j, x, y;
+    int i;
     if (PLAY == YES) {
         uint32_t frameStart = SDL_GetTicks();
         gl_copyboxfromcontext(&static_picture, 0, 0, 639, 479, 0, 0);
