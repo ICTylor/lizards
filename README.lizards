@@ -1,5 +1,6 @@
 This is just a lazy Emscripten port of Lizards, a game that I remember from old versions of Slackware. 
-I am NOT the original author. Part of the code is written by LLM (most of the "svgalib compat" code for example).
+I am NOT the original author of the game, only the port.
+Part of the code is written by LLM (most of the "svgalib compat" code for example).
 This port has some issues / bugs. But it is somewhat playable at least.
 
 ORIGINAL README BELOW:
