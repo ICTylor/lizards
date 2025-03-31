@@ -3,57 +3,385 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Emscripten-Generated Code</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lizards</title>
     <style>
-        body { background-color: antiquewhite; }
-        .emscripten { padding-right: 0; margin-left: auto; margin-right: auto; display: block; }
-        div.emscripten { text-align: center; }
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        canvas.emscripten { border: 0px none; background-color: black;}
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Game container styling */
+        .game-container {
+            position: relative;
+            margin: 0 auto;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Canvas styling */
+        canvas.emscripten {
+            border: 0;
+            background-color: black;
+            display: block;
+            object-fit: contain;
+        }
+
+        /* Desktop specific styling */
+        @media (min-width: 1024px) {
+            .game-container {
+                width: auto;
+            }
+
+            canvas.emscripten {
+                width: 640px;
+                height: 480px;
+            }
+
+            .mobile-controls {
+                display: none;
+            }
+
+            body {
+                background-color: #333;
+            }
+        }
+
+        /* Mobile styling */
+        @media (max-width: 1023px) {
+            .game-container {
+                width: 95%;
+                max-width: 95vh;
+            }
+
+            canvas.emscripten {
+                width: 100%;
+                height: auto;
+                aspect-ratio: 4/3;
+            }
+        }
+
+        /* Mobile controls */
+        .mobile-controls {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding: 10px;
+            display: none;
+        }
+
+        /* Show controls on mobile */
+        .is-mobile .mobile-controls {
+            display: flex;
+        }
+
+        /* Control toggle for desktop */
+        .controls-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        /* D-pad */
+        .d-pad {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin-left: 10px;
+        }
+
+        .d-pad-button {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            touch-action: none;
+            font-weight: bold;
+        }
+
+        .d-pad-button.active, .action-button.active {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .d-pad-up {
+            top: 0;
+            left: 50px;
+        }
+
+        .d-pad-right {
+            top: 50px;
+            left: 100px;
+        }
+
+        .d-pad-down {
+            top: 100px;
+            left: 50px;
+        }
+
+        .d-pad-left {
+            top: 50px;
+            left: 0;
+        }
+
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-right: 10px;
+        }
+
+        .action-button {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* Responsive layout adjustments */
+        @media (max-width: 1023px) and (orientation: portrait) {
+            .mobile-controls {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .d-pad, .action-buttons {
+                margin: 0;
+            }
+        }
     </style>
 </head>
 <body>
-<canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" width="640" height="480" tabindex=-1></canvas>
-<script type='text/javascript'>
-    var Module = {
-        print: (function() {
-            return (...args) => {
-                var text = args.join(' ');
-                console.log(text);
-            };
-        })(),
-        canvas: (() => {
-            var canvas = document.getElementById('canvas');
+<div class="game-container">
+    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
-            // As a default initial behavior, pop up an alert when webgl context is lost. To make your
-            // application robust, you may want to override this behavior before shipping!
-            // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
-            canvas.addEventListener("webglcontextlost", (e) => { alert('WebGL context lost. You will need to reload the page.'); e.preventDefault(); }, false);
+    <!-- Mobile Controls -->
+    <div class="mobile-controls">
+        <!-- D-Pad -->
+        <div class="d-pad">
+            <div class="d-pad-button d-pad-up" id="btn-up">▲</div>
+            <div class="d-pad-button d-pad-right" id="btn-right">►</div>
+            <div class="d-pad-button d-pad-down" id="btn-down">▼</div>
+            <div class="d-pad-button d-pad-left" id="btn-left">◄</div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <div class="action-button" id="btn-map">MAP</div>
+            <div class="action-button" id="btn-restart">RESET</div>
+            <div class="action-button" id="btn-quit">QUIT</div>
+        </div>
+    </div>
+</div>
+
+<!-- Controls toggle button (hidden on mobile) -->
+<button class="controls-toggle" id="toggle-controls">Show Controls</button>
+
+<script>
+    var Module = {
+        print: function(text) {
+            console.log(text);
+        },
+        canvas: (function() {
+            var canvas = document.getElementById('canvas');
+            canvas.addEventListener("webglcontextlost", function(e) {
+                alert('WebGL context lost. You will need to reload the page.');
+                e.preventDefault();
+            }, false);
+
+            // Set canvas dimensions
+            canvas.width = 640;
+            canvas.height = 480;
 
             return canvas;
         })(),
-        setStatus: (text) => {
+        setStatus: function(text) {
             if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
             if (text === Module.setStatus.last.text) return;
-            var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
-            var now = Date.now();
-            if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
-            Module.setStatus.last.time = now;
-            Module.setStatus.last.text = text;
+            console.log(text);
         },
         totalDependencies: 0,
-        monitorRunDependencies: (left) => {
+        monitorRunDependencies: function(left) {
             this.totalDependencies = Math.max(this.totalDependencies, left);
             Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        },
+        // Add keyboard_state for direct access if needed
+        onRuntimeInitialized: function() {
+            console.log("Emscripten runtime initialized");
         }
     };
-    Module.setStatus('Downloading...');
-    window.onerror = () => {
-        Module.setStatus('Exception thrown, see JavaScript console');
-        Module.setStatus = (text) => {
-            if (text) console.error('[post-exception status] ' + text);
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Simple helper to detect mobile devices
+        function isMobileDevice() {
+            return (
+                navigator.userAgent.match(/Android/i) ||
+                navigator.userAgent.match(/webOS/i) ||
+                navigator.userAgent.match(/iPhone/i) ||
+                navigator.userAgent.match(/iPad/i) ||
+                navigator.userAgent.match(/iPod/i) ||
+                navigator.userAgent.match(/BlackBerry/i) ||
+                navigator.userAgent.match(/Windows Phone/i) ||
+                (window.innerWidth <= 800)
+            );
+        }
+
+        // Apply mobile class if on mobile
+        if (isMobileDevice()) {
+            document.body.classList.add('is-mobile');
+        }
+
+        // Game key mappings - from C code
+        const KEY_MAP = {
+            'btn-up': 'q',      // UP - maps to 'q' in the game
+            'btn-down': 'a',    // DOWN - maps to 'a' in the game
+            'btn-left': 'o',    // LEFT - maps to 'o' in the game
+            'btn-right': 'p',   // RIGHT - maps to 'p' in the game
+            'btn-map': ' ',     // MAP - maps to space in the game
+            'btn-restart': 'x', // RESTART - maps to 'x' in the game
+            'btn-quit': 'Escape' // QUIT - maps to Escape in the game
         };
-    };
+
+        // Native key codes
+        const KEY_CODES = {
+            'q': 81,       // Q key
+            'a': 65,       // A key
+            'o': 79,       // O key
+            'p': 80,       // P key
+            ' ': 32,       // Space
+            'x': 88,       // X key
+            'Escape': 27   // Escape key
+        };
+
+        // Simple function to simulate keyboard events
+        function simulateKeyEvent(key, isDown) {
+            const canvas = document.getElementById('canvas');
+            if (!canvas) return;
+
+            // Make sure canvas has focus
+            canvas.focus();
+
+            const eventType = isDown ? 'keydown' : 'keyup';
+            const keyCode = KEY_CODES[key] || key.charCodeAt(0);
+
+            const event = new KeyboardEvent(eventType, {
+                key: key,
+                code: key.length === 1 ? 'Key' + key.toUpperCase() : key,
+                keyCode: keyCode,
+                which: keyCode,
+                bubbles: true,
+                cancelable: true
+            });
+
+            canvas.dispatchEvent(event);
+        }
+
+        // Set up button event handlers
+        const buttons = document.querySelectorAll('.d-pad-button, .action-button');
+
+        buttons.forEach(button => {
+            let isPressed = false;
+
+            function handleButtonPress(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isPressed) {
+                    isPressed = true;
+                    button.classList.add('active');
+                    const key = KEY_MAP[button.id];
+                    simulateKeyEvent(key, true);
+                }
+            }
+
+            function handleButtonRelease(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isPressed) {
+                    isPressed = false;
+                    button.classList.remove('active');
+                    const key = KEY_MAP[button.id];
+                    simulateKeyEvent(key, false);
+                }
+            }
+
+            // Mouse events
+            button.addEventListener('mousedown', handleButtonPress);
+            button.addEventListener('mouseup', handleButtonRelease);
+            button.addEventListener('mouseleave', handleButtonRelease);
+
+            // Touch events
+            button.addEventListener('touchstart', handleButtonPress);
+            button.addEventListener('touchend', handleButtonRelease);
+            button.addEventListener('touchcancel', handleButtonRelease);
+        });
+
+        // Toggle controls on desktop
+        const toggleBtn = document.getElementById('toggle-controls');
+        const mobileControls = document.querySelector('.mobile-controls');
+
+        if (!isMobileDevice()) {
+            toggleBtn.style.display = 'block';
+
+            toggleBtn.addEventListener('click', function() {
+                if (mobileControls.style.display === 'flex') {
+                    mobileControls.style.display = 'none';
+                    this.textContent = 'Show Controls';
+                } else {
+                    mobileControls.style.display = 'flex';
+                    this.textContent = 'Hide Controls';
+                }
+            });
+        } else {
+            toggleBtn.style.display = 'none';
+        }
+
+        // Prevent unwanted mobile behaviors
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.tagName !== 'CANVAS') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('contextmenu', function(e) {
+            if (isMobileDevice()) {
+                e.preventDefault();
+            }
+        });
+    });
 </script>
 {{{ SCRIPT }}}
 </body>
